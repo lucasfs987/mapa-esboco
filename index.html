@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rascunho — Mapa conceitual: Divertículo de Zenker</title>
+<style>
+  :root{
+    --ink:#1f2421; --ink-2:#5c6560; --line:#d6d9d4; --paper:#fbfaf7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Inter","Helvetica Neue",Arial,sans-serif;}
+  header{padding:20px 24px 14px;border-bottom:1px solid var(--line);background:#fff;
+    position:sticky;top:0;z-index:20}
+  h1{margin:0 0 4px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .sub{margin:0;font-size:12.5px;color:var(--ink-2)}
+  .bar{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:14px;font-size:12.5px;color:var(--ink-2)}
+  .bar label{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+  input[type=range]{width:150px}
+  button{font:inherit;font-size:12.5px;padding:5px 11px;border:1px solid var(--line);
+    background:#fff;border-radius:6px;cursor:pointer;color:var(--ink)}
+  button:hover{border-color:#a9afa9}
+  .legend{display:flex;flex-wrap:wrap;gap:6px;padding:12px 24px;background:#fff;
+    border-bottom:1px solid var(--line);font-size:11px}
+  .chip{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;border:1px solid}
+  .dot{width:8px;height:8px;border-radius:50%}
+  #viewport{overflow:auto;background:
+    linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px) 0 0/40px 40px,
+    linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px) 0 0/40px 40px, var(--paper);
+    height:calc(100vh - 168px)}
+  #stage{transform-origin:0 0}
+  #canvas{position:relative}
+  #wires{position:absolute;inset:0;pointer-events:none}
+  .node{position:absolute;width:220px;border:1.5px solid;border-radius:9px;
+    padding:8px 10px;font-size:11.5px;line-height:1.35;visibility:hidden}
+  .node .verb{display:block;font-size:9.5px;font-style:italic;opacity:.72;
+    margin-bottom:3px;letter-spacing:.01em}
+  #center{position:absolute;width:250px;border:2px solid #3b1f6e;border-radius:12px;
+    background:#4c1d95;color:#fff;padding:14px 14px;text-align:center;visibility:hidden}
+  #center b{display:block;font-size:15px;font-weight:600;line-height:1.25}
+  #center span{display:block;font-size:11px;opacity:.82;margin-top:5px}
+  .xlabel{position:absolute;font-size:9.5px;font-style:italic;color:#6b7280;
+    background:#fbfaf7;border:1px solid #e2e5e0;border-radius:10px;padding:1px 7px;
+    transform:translate(-50%,-50%);white-space:nowrap}
+  .hidden{display:none!important}
+  footer{padding:10px 24px;font-size:11.5px;color:var(--ink-2);background:#fff;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rascunho visual — Mapa conceitual: divertículo de Zenker</h1>
+  <p class="sub">Caso 6 · Turma 124 · gabarito de posicionamento para montagem no Canva</p>
+  <div class="bar">
+    <label>Zoom <input type="range" id="zoom" min="20" max="120" value="45"><span id="zval">45%</span></label>
+    <label><input type="checkbox" id="cross" checked> Mostrar ligações cruzadas</label>
+    <button id="fit">Ajustar à tela</button>
+    <button id="print">Imprimir / PDF</button>
+  </div>
+</header>
+
+<div class="legend" id="legend"></div>
+
+<div id="viewport"><div id="stage"><div id="canvas">
+  <svg id="wires"></svg>
+  <div id="center"><b>DIVERTÍCULO DE ZENKER</b><span>divertículo faringoesofágico — caso 6</span></div>
+</div></div></div>
+
+<footer>O verbo conectivo aparece em itálico no topo de cada caixa. Ao montar no Canva, ele vai escrito <b>sobre a seta</b> que chega naquela caixa.</footer>
+
+<script>
+const PAL = {
+  paciente:  {bg:'#EFEAFC', b:'#B49CEF', t:'#43268F', n:'Paciente do caso'},
+  risco:     {bg:'#F2F1EC', b:'#C6C4BA', t:'#3E4340', n:'Fatores de risco'},
+  fisio:     {bg:'#FBE8F0', b:'#E9A6C0', t:'#8B2A50', n:'Fisiopatologia'},
+  anatomia:  {bg:'#FBEBE4', b:'#EFB197', t:'#8A3216', n:'Anatomia'},
+  pseudo:    {bg:'#FDF0DA', b:'#EFC272', t:'#7B4A06', n:'Pseudodivertículo'},
+  clinico:   {bg:'#E1F5EF', b:'#8AD7BF', t:'#0D6450', n:'Quadro clínico'},
+  exames:    {bg:'#E6F1FB', b:'#99C6EE', t:'#0E4D87', n:'Exames'},
+  classif:   {bg:'#FDF3D3', b:'#EACF78', t:'#795904', n:'Classificação'},
+  trat:      {bg:'#EAF4DF', b:'#B2D68A', t:'#35600E', n:'Tratamento'},
+  posop:     {bg:'#FCE9E9', b:'#EFA2A2', t:'#94282A', n:'Pós-operatório'}
+};
+
+const RIGHT = [
+ {c:'risco', v:'cujos determinantes são', t:'Fatores de risco e epidemiologia', ch:[
+   {v:'tem como principal', t:'Idade avançada — pico de incidência entre 60 e 80 anos', id:'idade'},
+   {v:'acomete mais o', t:'Sexo masculino, na proporção aproximada de 2:1'},
+   {v:'decorre da', t:'Perda de elasticidade e degeneração fibrosa do músculo cricofaríngeo com o envelhecimento'},
+   {v:'associa-se à', t:'DRGE e esofagite, que geram contração reflexa do esfíncter esofágico superior'},
+   {v:'associa-se também a', t:'Distúrbios da motilidade esofágica'},
+   {v:'contrasta com', t:'O paciente do caso, de 45 anos — apresentação mais precoce que a habitual'}
+ ]},
+ {c:'fisio', v:'origina-se de', t:'Falha na coordenação da fase faríngea da deglutição', ch:[
+   {v:'que normalmente depende do', t:'Relaxamento sincronizado do esfíncter esofágico superior durante a deglutição'},
+   {v:'e aqui está alterada por', t:'Relaxamento inadequado e incoordenação do músculo cricofaríngeo', id:'relaxInad', ch:[
+     {v:'que resulta de', t:'Fibrose e degeneração das fibras musculares, com perda de complacência'},
+     {v:'e provoca', t:'Aumento da pressão intrafaríngea durante a deglutição', ch:[
+       {v:'que determina', t:'Herniação da mucosa e da submucosa no ponto de menor resistência da parede posterior', ch:[
+         {v:'caracterizando um', t:'Divertículo de pulsão (por pressão), diferente do divertículo de tração'},
+         {v:'cujo saco causa', t:'Retenção de alimentos e secreções, com inflamação crônica local', id:'retencao'},
+         {c:'pseudo', v:'e constitui um', t:'Pseudodivertículo (divertículo falso)', ch:[
+           {v:'porque contém apenas', t:'Mucosa e submucosa, sem a camada muscular própria'},
+           {v:'diferindo do', t:'Divertículo verdadeiro, que contém todas as camadas — ex.: divertículo de tração do esôfago médio'},
+           {v:'sendo classificado como', t:'Divertículo faringoesofágico, de pulsão, falso e adquirido'}
+         ]}
+       ]}
+     ]}
+   ]}
+ ]},
+ {c:'anatomia', v:'localiza-se no', t:'Esôfago cervical, ao nível de C5–C7 (C7 no caso descrito)', ch:[
+   {v:'cuja parede é organizada em', t:'Mucosa, submucosa, muscular própria e adventícia', ch:[
+     {v:'que se distingue por', t:'Não possuir serosa, ao contrário do restante do tubo digestório'},
+     {v:'cuja muscular própria contém', t:'Camada circular interna e camada longitudinal externa'},
+     {v:'que no terço superior é', t:'Musculatura estriada esquelética, de controle voluntário'}
+   ]},
+   {v:'especificamente no', t:'Trígono (espaço) de Killian', id:'killian', ch:[
+     {v:'que se situa entre', t:'Músculo constritor inferior da faringe e músculo cricofaríngeo'},
+     {v:'que corresponde ao', t:'Esfíncter esofágico superior'},
+     {v:'e constitui uma', t:'Área de fraqueza da parede posterior da hipofaringe'}
+   ]},
+   {v:'com projeção', t:'Posterior e habitualmente para a esquerda da linha média'},
+   {v:'tendo como estrutura vizinha', t:'Nervo laríngeo recorrente, no sulco traqueoesofágico', id:'nlr'}
+ ]}
+];
+
+const LEFT = [
+ {c:'paciente', v:'foi descrito em', t:'Homem, 45 anos, sem comorbidades prévias', ch:[
+   {v:'procurou atendimento por', t:'Disfagia progressiva, regurgitação de alimentos não digeridos e dor torácica intermitente'},
+   {v:'referiu também', t:'Tosse crônica e sensação de corpo estranho na região cervical'},
+   {v:'não apresentava', t:'Sinais de alarme: sem perda de peso, hematêmese ou febre'},
+   {v:'ao exame físico apresentava', t:'Dor discreta à palpação cervical anterior, sem linfadenopatia'},
+   {v:'foi submetido em 15/05/2023 a', t:'Diverticulectomia com miotomia do cricofaríngeo e do esôfago cervical'},
+   {v:'evoluiu com', t:'Alta hospitalar em 20/05/2023, com boa recuperação funcional'}
+ ]},
+ {c:'clinico', v:'manifesta-se por', t:'Disfagia alta (orofaríngea) de caráter progressivo', id:'disfagia', ch:[
+   {v:'é progressiva porque', t:'O saco cresce, retém alimento e comprime o esôfago anteriormente, somando-se à fibrose do cricofaríngeo'},
+   {v:'evolui de', t:'Disfagia a sólidos para disfagia também a líquidos'},
+   {v:'acompanha-se de', t:'Regurgitação de alimentos não digeridos, sem conteúdo ácido'},
+   {v:'acompanha-se de', t:'Halitose, por estase e fermentação do conteúdo retido'},
+   {v:'acompanha-se de', t:'Tosse crônica, predominantemente noturna'},
+   {v:'acompanha-se de', t:'Sensação de corpo estranho cervical (globus)'},
+   {v:'pode apresentar', t:'Sinal de Boyce: massa cervical que gorgoleja à compressão'},
+   {v:'pode levar a', t:'Perda de peso e desnutrição'},
+   {v:'pode levar a', t:'Aspiração traqueobrônquica', ch:[
+     {v:'que causa', t:'Pneumonia aspirativa de repetição e abscesso pulmonar'}
+   ]},
+   {v:'raramente evolui para', t:'Fistulização, hemorragia ou carcinoma escamoso no interior do saco (0,3–1,5%)'}
+ ]},
+ {c:'exames', v:'é confirmado por', t:'Esofagografia baritada (esofagograma) — exame de escolha', id:'esofagografia', ch:[
+   {v:'cujo achado é', t:'Bolsa sacular na parede posterior da hipofaringe, com retenção de contraste'},
+   {v:'deve ser realizada em', t:'Incidência lateral (perfil), que evita a sobreposição da coluna'},
+   {c:'classif', v:'permite classificar em', t:'Classificação de Lahey — critério anatômico', ch:[
+     {v:'que define', t:'I: pequena protrusão mucosa · II: saco definido com esôfago alinhado · III: saco grande com desvio anterior do esôfago'}
+   ]},
+   {c:'classif', v:'permite classificar em', t:'Classificação de Morton & Bartley — critério de tamanho', id:'morton', ch:[
+     {v:'que define', t:'Pequeno < 2 cm · médio 2–4 cm · grande > 4 cm'},
+     {v:'no caso corresponde a', t:'Divertículo grande: colo de ~5 cm e volume de 6 cm'}
+   ]},
+   {v:'pode ser complementado por', t:'Videofluoroscopia da deglutição, que avalia a dinâmica e o risco de aspiração'},
+   {v:'pode ser complementado por', t:'Endoscopia digestiva alta — limitada pela estase e com risco de perfuração do saco'},
+   {v:'pode ser complementado por', t:'Tomografia cervical, útil em divertículos grandes ou complicados'},
+   {v:'pode ser complementado por', t:'Manometria, que evidencia a incoordenação do esfíncter esofágico superior'},
+   {v:'no caso descrito mostrou', t:'Leucocitose leve (13.740/mm³), sugestiva de inflamação de baixo grau'},
+   {v:'foi confirmado pelo', t:'Laudo anatomopatológico: saco revestido por mucosa escamosa sem atipias, parcialmente envolto por muscular própria, com infiltrado linfocitário'},
+   {v:'deve ser diferenciado de', t:'Acalasia, estenose péptica, neoplasia de hipofaringe/esôfago e disfagia neurogênica'}
+ ]},
+ {c:'trat', v:'é tratado por', t:'Tratamento cirúrgico, indicado nos casos sintomáticos ou com risco de aspiração', id:'tratamento', ch:[
+   {v:'porque', t:'O tratamento conservador é habitualmente ineficaz em divertículos maiores'},
+   {v:'tem como princípio comum a', t:'Miotomia do músculo cricofaríngeo, que trata a causa e previne a recidiva'},
+   {v:'pode ser feito por', t:'Abordagem aberta, via cervicotomia lateral esquerda', ch:[
+     {v:'que inclui', t:'Miotomia isolada, em divertículos menores que 2 cm'},
+     {v:'que inclui', t:'Diverticulopexia com miotomia, em divertículos de 2 a 4 cm'},
+     {v:'que inclui', t:'Diverticulectomia com miotomia, em divertículos maiores que 4 cm'}
+   ]},
+   {v:'pode ser feito por', t:'Abordagem endoscópica: diverticulotomia (técnica de Dohlman) e Z-POEM', ch:[
+     {v:'que oferece', t:'Menor morbidade e recuperação mais rápida, favorecendo idosos e pacientes com comorbidades'},
+     {v:'mas apresenta', t:'Maior taxa de recidiva e exigência de abertura bucal adequada'}
+   ]},
+   {v:'no caso descrito consistiu em', t:'Dissecção guiada por sonda de Fouchet em espaço retrofaríngeo, com miotomia de ~3 cm e diverticulectomia'}
+ ]},
+ {c:'posop', v:'pode complicar com', t:'Cuidados e complicações pós-operatórias', ch:[
+   {v:'exige inicialmente', t:'Dieta zero, com esofagograma de controle antes da liberação da dieta oral', ch:[
+     {v:'que progride para', t:'Dieta líquida completa e, em seguida, pastosa'}
+   ]},
+   {v:'pode complicar com', t:'Lesão do nervo laríngeo recorrente', id:'lesaoNLR', ch:[
+     {v:'que se manifesta por', t:'Disfonia, rouquidão e paralisia de prega vocal, com risco adicional de aspiração'}
+   ]},
+   {v:'pode complicar com', t:'Fístula salivar cervical', ch:[
+     {v:'que pode evoluir para', t:'Mediastinite e sepse'}
+   ]},
+   {v:'pode complicar com', t:'Estenose esofágica e recidiva, sobretudo se a miotomia for incompleta'},
+   {v:'no caso descrito apresentou', t:'Esofagograma de controle sem fístulas ou estenoses, com imagem residual de 0,7 cm'}
+ ]}
+];
+
+const CROSS = [
+ {a:'morton',        b:'tratamento',    l:'determina a escolha da'},
+ {a:'killian',       b:'esofagografia', l:'é a estrutura revelada pela'},
+ {a:'retencao',      b:'disfagia',      l:'explica por que'},
+ {a:'idade',         b:'relaxInad',     l:'é o substrato do'},
+ {a:'nlr',           b:'lesaoNLR',      l:'impõe risco de'}
+];
+
+const BW=220, COLW=298, VGAP=16, CENTER_W=250, CENTER_GAP=70, PAD=60;
+const canvas=document.getElementById('canvas'), wires=document.getElementById('wires'),
+      center=document.getElementById('center');
+const nodes=[], byId={};
+
+function walk(n,color,depth,side,parent){
+  n.color=n.c||color; n.depth=depth; n.side=side; n.parent=parent;
+  const p=PAL[n.color];
+  const el=document.createElement('div');
+  el.className='node';
+  el.style.background=p.bg; el.style.borderColor=p.b; el.style.color=p.t;
+  el.innerHTML=(n.v?'<span class="verb">'+n.v+'</span>':'')+n.t;
+  canvas.appendChild(el); n.el=el; nodes.push(n);
+  if(n.id) byId[n.id]=n;
+  (n.ch||[]).forEach(c=>walk(c,n.color,depth+1,side,n));
+}
+RIGHT.forEach(b=>walk(b,b.c,1,1,null));
+LEFT.forEach(b=>walk(b,b.c,1,-1,null));
+
+nodes.forEach(n=>{n.h=n.el.offsetHeight;});
+const centerH=center.offsetHeight;
+
+function measure(n){
+  if(!n.ch||!n.ch.length){n.sh=n.h;return n.sh;}
+  let s=0; n.ch.forEach((c,i)=>{s+=measure(c); if(i)s+=VGAP;});
+  n.sh=Math.max(n.h,s); return n.sh;
+}
+function place(n,top){
+  n.y=top+(n.sh-n.h)/2;
+  if(!n.ch||!n.ch.length)return;
+  let s=0; n.ch.forEach((c,i)=>{s+=c.sh+(i?VGAP:0);});
+  let cy=top+(n.sh-s)/2;
+  n.ch.forEach(c=>{place(c,cy); cy+=c.sh+VGAP;});
+}
+function sideHeight(roots){let s=0;roots.forEach((r,i)=>{s+=measure(r)+(i?VGAP*3:0);});return s;}
+const rH=sideHeight(RIGHT), lH=sideHeight(LEFT);
+const H=Math.max(rH,lH)+PAD*2;
+
+let ry=PAD+(H-PAD*2-rH)/2; RIGHT.forEach(r=>{place(r,ry); ry+=r.sh+VGAP*3;});
+let ly=PAD+(H-PAD*2-lH)/2; LEFT.forEach(r=>{place(r,ly); ly+=r.sh+VGAP*3;});
+
+let maxD=1; nodes.forEach(n=>{if(n.depth>maxD)maxD=n.depth;});
+let maxDL=1,maxDR=1;
+nodes.forEach(n=>{if(n.side<0){if(n.depth>maxDL)maxDL=n.depth;}else{if(n.depth>maxDR)maxDR=n.depth;}});
+const leftSpan=maxDL*COLW, rightSpan=maxDR*COLW;
+const cx=PAD+leftSpan;
+const W=PAD*2+leftSpan+CENTER_W+rightSpan;
+
+nodes.forEach(n=>{
+  n.x = n.side>0
+    ? cx+CENTER_W+CENTER_GAP+(n.depth-1)*COLW
+    : cx-CENTER_GAP-(n.depth-1)*COLW-BW;
+  n.el.style.left=n.x+'px'; n.el.style.top=n.y+'px'; n.el.style.visibility='visible';
+});
+center.style.left=cx+'px'; center.style.top=(H/2-centerH/2)+'px'; center.style.visibility='visible';
+canvas.style.width=W+'px'; canvas.style.height=H+'px';
+wires.setAttribute('viewBox','0 0 '+W+' '+H);
+wires.setAttribute('width',W); wires.setAttribute('height',H);
+
+const C={x:cx,y:H/2-centerH/2,w:CENTER_W,h:centerH};
+let svg='';
+nodes.forEach(n=>{
+  const p=n.parent, pal=PAL[n.color];
+  const px = p ? (n.side>0 ? p.x+BW : p.x) : (n.side>0 ? C.x+C.w : C.x);
+  const py = p ? p.y+p.h/2 : C.y+C.h/2;
+  const nx = n.side>0 ? n.x : n.x+BW;
+  const ny = n.y+n.h/2;
+  const mx = (px+nx)/2;
+  svg+='<path d="M'+px+','+py+' C'+mx+','+py+' '+mx+','+ny+' '+nx+','+ny+'" fill="none" stroke="'+pal.b+'" stroke-width="1.6"/>';
+});
+svg+='<g id="xlines">';
+CROSS.forEach(k=>{
+  const a=byId[k.a], b=byId[k.b]; if(!a||!b)return;
+  const ax=a.x+BW/2, ay=a.y+a.h/2, bx=b.x+BW/2, by=b.y+b.h/2;
+  const my=Math.min(ay,by)-Math.abs(ax-bx)*0.18-40;
+  svg+='<path d="M'+ax+','+ay+' Q'+((ax+bx)/2)+','+my+' '+bx+','+by+'" fill="none" stroke="#8b8f8a" stroke-width="1.6" stroke-dasharray="7 6"/>';
+  k.lx=(ax+bx)/2; k.ly=(ay+by)/4+my/2;
+});
+svg+='</g>';
+wires.innerHTML=svg;
+
+CROSS.forEach(k=>{
+  if(k.lx==null)return;
+  const d=document.createElement('div');
+  d.className='xlabel xlbl'; d.textContent=k.l;
+  d.style.left=k.lx+'px'; d.style.top=k.ly+'px';
+  canvas.appendChild(d);
+});
+
+const leg=document.getElementById('legend');
+Object.values(PAL).forEach(p=>{
+  const c=document.createElement('span'); c.className='chip';
+  c.style.background=p.bg; c.style.borderColor=p.b; c.style.color=p.t;
+  c.innerHTML='<span class="dot" style="background:'+p.b+'"></span>'+p.n;
+  leg.appendChild(c);
+});
+const cx2=document.createElement('span'); cx2.className='chip';
+cx2.style.background='#fff'; cx2.style.borderColor='#c9cdc8'; cx2.style.color='#5c6560';
+cx2.innerHTML='<span class="dot" style="background:#8b8f8a"></span>Ligações cruzadas (tracejadas)';
+leg.appendChild(cx2);
+
+const stage=document.getElementById('stage'), zoom=document.getElementById('zoom'),
+      zval=document.getElementById('zval');
+function applyZoom(v){
+  stage.style.transform='scale('+(v/100)+')';
+  stage.style.width=(W*v/100)+'px'; stage.style.height=(H*v/100)+'px';
+  zval.textContent=v+'%';
+}
+zoom.addEventListener('input',e=>applyZoom(+e.target.value));
+document.getElementById('fit').addEventListener('click',()=>{
+  const vw=document.getElementById('viewport').clientWidth-20;
+  const v=Math.max(15,Math.min(120,Math.floor(vw/W*100)));
+  zoom.value=v; applyZoom(v);
+});
+document.getElementById('cross').addEventListener('change',e=>{
+  const on=e.target.checked;
+  document.getElementById('xlines').style.display=on?'':'none';
+  document.querySelectorAll('.xlbl').forEach(l=>l.classList.toggle('hidden',!on));
+});
+document.getElementById('print').addEventListener('click',()=>window.print());
+applyZoom(45);
+</script>
+</body>
+</html>
